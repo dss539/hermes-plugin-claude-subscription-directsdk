@@ -6,6 +6,10 @@ Standalone Hermes Agent model-provider plugin: `claude-subscription-directsdk-ex
 
 ## Requirements
 
+This streaming branch also requires Hermes core's `ProviderProfile.supports_streaming`
+capability. Promote the matching core change before this plugin; unmodified cores
+reject the new profile constructor field. No timeout configuration change is needed.
+
 - Hermes Agent 0.21.4 or newer, or `main` at/after `118984d7a02f` (hermes-agent PR #117451, the core half of #105863). On an older Hermes the plugin fails to load with a clear `Failed to load user provider plugin` warning rather than half-working.
 - Python 3.10+ on Linux, macOS or Windows. Native runs in its own process group (POSIX session / Windows `CREATE_NEW_PROCESS_GROUP`) and cancellation kills the whole tree (`killpg` / `taskkill /T`), so the `node` child behind the npm `claude.cmd` shim never outlives a cancelled request. The suite runs on all three in CI.
 - **The official Claude Code CLI, installed and logged in.** This plugin has no credentials of its own; everything goes through `claude`. Haiku 5.5 (the `haiku` alias) needs Claude Code **2.1.293** or newer, Sonnet 5.5 (the `sonnet` alias) needs **2.1.284** or newer and Opus 5.5 (the `opus` alias) needs **2.1.280** or newer; an older CLI answers `400 Claude Code … does not support this model`, so run `claude update` first ([model configuration](https://code.claude.com/docs/en/model-config#model-aliases)).
@@ -107,7 +111,10 @@ A real Sonnet 5 Hermes review task reproduced poor cache reuse: its first reques
 
 Disabling the native reminder restored stable prefixes without adding cache markers or changing cache TTL. A completed seven-call review used ten real Hermes tool executions, ran six offline tests, and wrote its review artifacts. Context grew from 187K to 212K; follow-up requests averaged 97.99% cache reads, or 85.45% including the cold start. Native list-price accounting totalled $1.1030034, not a verified subscription charge. These are Sonnet 5 results: Fable 5.1 required usage credits on the qualification account and was not exercised with paid credits. Model entitlement and allowance consumption remain native-account dependent.
 
-Text streams incrementally. A complete tool batch is published only after assistant completion, `message_stop`, final usage and native exit. Hermes then applies its own hooks, approvals, tools and persistence. Tool names map through `mcp__hermes__`; original names must be unique ASCII alphanumeric/underscore/hyphen identifiers of at most 50 characters.
+Text and thinking stream incrementally. Other real native events (including tool-argument
+JSON deltas and replay acknowledgments) yield empty progress chunks so Hermes' stale
+watchdog measures silence, not total generation time. No synthetic heartbeat is emitted.
+A complete tool batch is published only after assistant completion, `message_stop`, final usage and native exit. Hermes then applies its own hooks, approvals, tools and persistence. Tool names map through `mcp__hermes__`; original names must be unique ASCII alphanumeric/underscore/hyphen identifiers of at most 50 characters.
 
 `--max-turns 1` is a logical native step; the relay supplies the HTTP admission boundary. `error_max_turns` is accepted with a complete tool batch, usage and exit code 1. Native `num_turns` may be 2 at that boundary. A completed first response also survives a locally denied recovery attempt or native refusal rendering; Hermes receives the actual refusal, not the CLI's synthetic error text. Other failures remain failures.
 

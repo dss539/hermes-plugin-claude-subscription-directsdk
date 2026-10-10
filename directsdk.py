@@ -676,6 +676,8 @@ class Client:
                             ack = receive()
                             if ack is None:
                                 raise RuntimeError('Native exited before replay acknowledgment')
+                            # Replay acknowledgments are real native progress too.
+                            yield self._chunk(kwargs['model'], {})
                             if ack.get('type') == 'result':
                                 if ack.get('num_turns') != 0 or ack.get('is_error'):
                                     raise RuntimeError('Native history replay not supported: expected zero-turn acknowledgment')
@@ -688,6 +690,7 @@ class Client:
                     if event is None:
                         break
                     kind = event.get('type')
+                    chunk_delta = {}
                     if kind == 'assistant':
                         if event.get('error') or event.get('message', {}).get('error'):
                             detail = '\n'.join(b.get('text', '') for b in event.get('message', {}).get('content', []) if b.get('type') == 'text')
@@ -703,9 +706,14 @@ class Client:
                         delta = native.get('delta', {})
                         if delta.get('type') == 'text_delta':
                             emitted += delta['text']
-                            yield self._chunk(kwargs['model'], {'content': delta['text']})
+                            chunk_delta = {'content': delta['text']}
                         elif delta.get('type') == 'thinking_delta':
-                            yield self._chunk(kwargs['model'], {'reasoning_content': delta['thinking']})
+                            chunk_delta = {'reasoning_content': delta['thinking']}
+                    # Hermes counts each chunk as progress. Forward native-only events
+                    # (notably input_json_delta) without accumulating partial tool args:
+                    # validated tool calls are emitted once, with the final carrier below.
+                    # No timer-generated chunks: a silent native process must still expire.
+                    yield self._chunk(kwargs['model'], chunk_delta)
                 p.wait(timeout=max(.1, deadline-time.monotonic()))
                 reader.join(timeout=1)
                 if request.cancelled.is_set():

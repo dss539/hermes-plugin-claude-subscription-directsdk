@@ -208,6 +208,7 @@ profile = ClaudeOAuthDirectSDKProfile(
     api_mode='chat_completions',
     auth_type='external_process',
     supports_health_check=False,
+    supports_streaming=True,
     # Per-model only: the profile-wide supports_vision would also flip computer_use screenshots
     # for unpinned ids to native, where the executor still treats them as text-only.
     model_capabilities=MODEL_CAPABILITIES,
